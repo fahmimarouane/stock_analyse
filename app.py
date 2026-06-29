@@ -125,6 +125,10 @@ if st.session_state.merged_df is not None:
                     f_df[f'{site1}_name'].astype(str).str.contains(search, case=False, na=False) | 
                     f_df[f'{site2}_name'].astype(str).str.contains(search, case=False, na=False)]
 
+    # Ensure URLs are strings and handle NaNs to prevent LinkColumn errors
+    f_df[f'{site1}_url'] = f_df[f'{site1}_url'].fillna("").astype(str)
+    f_df[f'{site2}_url'] = f_df[f'{site2}_url'].fillna("").astype(str)
+
     b1, b2 = st.columns(2)
     with b1: st.download_button("📥 Excel", to_excel(f_df), f"comp_{datetime.now():%Y%m%d}.xlsx", use_container_width=True)
     with b2: st.download_button("📄 CSV", f_df.to_csv(index=False).encode(), f"comp_{datetime.now():%Y%m%d}.csv", use_container_width=True)
@@ -141,13 +145,29 @@ if st.session_state.merged_df is not None:
     with t2:
         p_df = f_df.dropna(subset=[f'{site1}_price', f'{site2}_price']).copy()
         p_df['Diff (MAD)'] = p_df['price_diff'].round(2)
-        st.dataframe(p_df[['reference', 'categorie', f'{site1}_price', f'{site2}_price', 'Diff (MAD)']].sort_values('Diff (MAD)', ascending=False),
-                     use_container_width=True, hide_index=True,
-                     column_config={f'{site1}_price': st.column_config.NumberColumn(format="%.2f MAD"), f'{site2}_price': st.column_config.NumberColumn(format="%.2f MAD")})
-                     
+        st.dataframe(
+            p_df[['reference', 'categorie', f'{site1}_price', f'{site2}_price', 'Diff (MAD)', f'{site1}_url', f'{site2}_url']].sort_values('Diff (MAD)', ascending=False),
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                f'{site1}_price': st.column_config.NumberColumn(format="%.2f MAD"),
+                f'{site2}_price': st.column_config.NumberColumn(format="%.2f MAD"),
+                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", text=f"View {site1}"),
+                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", text=f"View {site2}")
+            }
+        )
+                        
     with t3:
         s_df = f_df[f_df['stock_status'].isin([f"Only {site1} In Stock", f"Only {site2} In Stock", "Both Out of Stock"])]
-        st.dataframe(s_df[['reference', 'categorie', 'stock_status', f'{site1}_stock', f'{site2}_stock']].style.map(lambda x: 'color: #ff4b4b' if x=='Out of Stock' else 'color: #21ba45', subset=[f'{site1}_stock', f'{site2}_stock']),
-                     use_container_width=True, hide_index=True)
+        st.dataframe(
+            s_df[['reference', 'categorie', 'stock_status', f'{site1}_stock', f'{site2}_stock', f'{site1}_url', f'{site2}_url']]
+              .style.map(lambda x: 'color: #ff4b4b' if x=='Out of Stock' else 'color: #21ba45', subset=[f'{site1}_stock', f'{site2}_stock']),
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", text=f"View {site1}"),
+                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", text=f"View {site2}")
+            }
+        )
 else:
     st.info("Upload files to begin.")
