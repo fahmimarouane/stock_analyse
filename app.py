@@ -6,14 +6,23 @@ from datetime import datetime
 
 st.set_page_config(page_title="PC Parts Comparison", page_icon="📊", layout="wide")
 
-# Minimal Dark Theme & Sidebar Styling
+# Minimal Dark Theme & Centered Menu Styling
 st.markdown("""
 <style>
     .stApp { background-color: #0e1117; color: #fafafa; }
     .stSidebar { background-color: #161b22; border-right: 1px solid #30363d; }
     [data-testid="stMetricValue"] { color: #58a6ff; }
     .stSidebar h2 { color: #58a6ff; font-size: 1.2rem; margin-top: 1rem; border-bottom: 1px solid #30363d; padding-bottom: 0.5rem; }
-    .stSidebar h3 { color: #c9d1d9; font-size: 1rem; margin-top: 1.5rem; }
+    
+    /* Center the horizontal radio menu */
+    div[role="radiogroup"] {
+        justify-content: center;
+        padding: 10px;
+        background-color: #161b22;
+        border-radius: 12px;
+        border: 1px solid #30363d;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,24 +127,26 @@ if file1 and file2:
 if st.session_state.merged_df is not None:
     df = st.session_state.merged_df
     
-    # --- FILTERS SECTION ---
-    st.sidebar.markdown("## 🔍 Filters")
-    
-    st.sidebar.markdown("#### Categories")
-    cats = sorted(df['categorie'].dropna().unique().tolist())
-    sel_cats = st.sidebar.multiselect("Select Categories", cats, default=cats, label_visibility="collapsed")
-    
-    st.sidebar.markdown("#### Stock Status")
-    stocks = df['stock_status'].unique().tolist()
-    sel_stocks = st.sidebar.multiselect("Select Status", stocks, default=stocks, label_visibility="collapsed")
-    
-    st.sidebar.markdown("#### Price Range (MAD)")
-    prices = pd.concat([df[f'{site1}_price'].dropna(), df[f'{site2}_price'].dropna()])
-    min_p, max_p = (float(prices.min()), float(prices.max())) if not prices.empty else (0.0, 0.0)
-    pr = st.sidebar.slider("Price Range", min_p, max_p, (min_p, max_p), label_visibility="collapsed")
-    
-    st.sidebar.markdown("#### Search")
-    search = st.sidebar.text_input("Search by Ref or Name", "", label_visibility="collapsed")
+    # --- FILTERS ON MAIN PAGE (Wonderful Bordered Layout) ---
+    with st.container(border=True):
+        st.markdown("#### 🔍 Filters & Search")
+        fc1, fc2, fc3, fc4 = st.columns([1.5, 1.2, 1.2, 1.2])
+        
+        with fc1:
+            cats = sorted(df['categorie'].dropna().unique().tolist())
+            sel_cats = st.multiselect("Categories", cats, default=cats)
+            
+        with fc2:
+            stocks = df['stock_status'].unique().tolist()
+            sel_stocks = st.multiselect("Stock Status", stocks, default=stocks)
+            
+        with fc3:
+            search = st.text_input("Search by Ref or Name", "")
+            
+        with fc4:
+            prices = pd.concat([df[f'{site1}_price'].dropna(), df[f'{site2}_price'].dropna()])
+            min_p, max_p = (float(prices.min()), float(prices.max())) if not prices.empty else (0.0, 0.0)
+            pr = st.slider("Price Range (MAD)", min_p, max_p, (min_p, max_p))
     
     # Apply Filters
     f_df = df[(df['categorie'].isin(sel_cats)) & (df['stock_status'].isin(sel_stocks))].copy()
@@ -145,43 +156,66 @@ if st.session_state.merged_df is not None:
                     f_df[f'{site1}_name'].astype(str).str.contains(search, case=False, na=False) | 
                     f_df[f'{site2}_name'].astype(str).str.contains(search, case=False, na=False)]
 
+    # Combine product names into ONE column right after 'categorie'
+    f_df['Product Name'] = f_df[f'{site1}_name'].fillna(f_df[f'{site2}_name'])
+
     # Ensure URLs are valid strings for links
     f_df[f'{site1}_url'] = f_df[f'{site1}_url'].fillna("").astype(str)
     f_df[f'{site2}_url'] = f_df[f'{site2}_url'].fillna("").astype(str)
 
+    # --- EXPORT BUTTONS ---
     b1, b2 = st.columns(2)
     with b1: st.download_button("📥 Excel", to_excel(f_df), f"comp_{datetime.now():%Y%m%d}.xlsx", use_container_width=True)
     with b2: st.download_button("📄 CSV", f_df.to_csv(index=False).encode(), f"comp_{datetime.now():%Y%m%d}.csv", use_container_width=True)
 
-    t1, t2, t3 = st.tabs(["📈 Summary", "💰 Prices", "📦 Stock"])
+    # --- HORIZONTAL CENTERED MENU ---
+    st.markdown("") # Spacer
+    view_options = ["📈 Summary", "💰 Prices", "📦 Stock"]
+    selected_view = st.radio("Navigation", view_options, horizontal=True, label_visibility="collapsed")
     
-    with t1:
+    # --- SUMMARY VIEW ---
+    if selected_view == "📈 Summary":
+        st.markdown("### 📈 Summary Metrics")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric(f"Total {site1}", len(st.session_state.df1))
         m2.metric(f"Total {site2}", len(st.session_state.df2))
         m3.metric("Common", len(df.dropna(subset=[f'{site1}_name', f'{site2}_name'])))
         m4.metric("Categories", len(cats))
         
-    with t2:
+    # --- PRICES VIEW ---
+    elif selected_view == "💰 Prices":
+        st.markdown("### 💰 Price Comparison")
         p_df = f_df.dropna(subset=[f'{site1}_price', f'{site2}_price']).copy()
         p_df['Diff (MAD)'] = p_df['price_diff'].round(2)
+        
+        display_cols_p = ['reference', 'categorie', 'Product Name', f'{site1}_price', f'{site2}_price', 'Diff (MAD)', f'{site1}_url', f'{site2}_url']
+        
         st.dataframe(
-            p_df[['reference', 'categorie', f'{site1}_name', f'{site1}_price', f'{site2}_name', f'{site2}_price', 'Diff (MAD)', f'{site1}_url', f'{site2}_url']].sort_values('Diff (MAD)', ascending=False),
+            p_df[display_cols_p].sort_values('Diff (MAD)', ascending=False),
             use_container_width=True, 
             hide_index=True,
             column_config={
-                f'{site1}_price': st.column_config.NumberColumn(format="%.2f MAD"),
-                f'{site2}_price': st.column_config.NumberColumn(format="%.2f MAD"),
+                f'{site1}_price': st.column_config.NumberColumn(f"{site1} Price", format="%.2f MAD"),
+                f'{site2}_price': st.column_config.NumberColumn(f"{site2} Price", format="%.2f MAD"),
                 f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", display_text=f"Open {site1}"),
                 f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", display_text=f"Open {site2}")
             }
         )
                         
-    with t3:
+    # --- STOCK VIEW ---
+    elif selected_view == "📦 Stock":
+        st.markdown("### 📦 Stock Availability")
         s_df = f_df[f_df['stock_status'].isin([f"Only {site1} In Stock", f"Only {site2} In Stock", "Both Out of Stock", "Both In Stock"])]
+        
+        display_cols_s = ['reference', 'categorie', 'Product Name', 'stock_status', f'{site1}_stock', f'{site2}_stock', f'{site1}_url', f'{site2}_url']
+        
+        def style_stock(val):
+            if val == 'In Stock': return 'color: #21ba45; font-weight: bold'
+            if val == 'Out of Stock': return 'color: #ff4b4b; font-weight: bold'
+            return 'color: gray' # For NaN/missing values
+            
         st.dataframe(
-            s_df[['reference', 'categorie', 'stock_status', f'{site1}_name', f'{site1}_stock', f'{site2}_name', f'{site2}_stock', f'{site1}_url', f'{site2}_url']]
-              .style.map(lambda x: 'color: #ff4b4b' if x=='Out of Stock' else 'color: #21ba45', subset=[f'{site1}_stock', f'{site2}_stock']),
+            s_df[display_cols_s].style.map(style_stock, subset=[f'{site1}_stock', f'{site2}_stock']),
             use_container_width=True, 
             hide_index=True,
             column_config={
