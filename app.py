@@ -37,6 +37,11 @@ def process_data(df, site_name):
     df = df[cols].copy()
     df['reference'] = df['reference'].astype(str).str.strip()
     df = df[df['reference'].notna() & (df['reference'] != '') & (df['reference'] != 'nan')]
+    
+    # Clean URLs to prevent LinkColumn errors
+    df['url_produit'] = df['url_produit'].astype(str).str.strip()
+    df.loc[df['url_produit'].isin(['nan', 'None', '']), 'url_produit'] = None
+    
     df['price_num'] = df['price'].apply(clean_price)
     df['availability'] = df['availability'].astype(str).str.lower().apply(
         lambda x: 'In Stock' if 'instock' in x or 'disponible' in x else 'Out of Stock'
@@ -125,10 +130,6 @@ if st.session_state.merged_df is not None:
                     f_df[f'{site1}_name'].astype(str).str.contains(search, case=False, na=False) | 
                     f_df[f'{site2}_name'].astype(str).str.contains(search, case=False, na=False)]
 
-    # Ensure URLs are strings and handle NaNs to prevent LinkColumn errors
-    f_df[f'{site1}_url'] = f_df[f'{site1}_url'].fillna("").astype(str)
-    f_df[f'{site2}_url'] = f_df[f'{site2}_url'].fillna("").astype(str)
-
     b1, b2 = st.columns(2)
     with b1: st.download_button("📥 Excel", to_excel(f_df), f"comp_{datetime.now():%Y%m%d}.xlsx", use_container_width=True)
     with b2: st.download_button("📄 CSV", f_df.to_csv(index=False).encode(), f"comp_{datetime.now():%Y%m%d}.csv", use_container_width=True)
@@ -152,8 +153,8 @@ if st.session_state.merged_df is not None:
             column_config={
                 f'{site1}_price': st.column_config.NumberColumn(format="%.2f MAD"),
                 f'{site2}_price': st.column_config.NumberColumn(format="%.2f MAD"),
-                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", text=f"View {site1}"),
-                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", text=f"View {site2}")
+                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", display_text=f"View {site1}"),
+                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", display_text=f"View {site2}")
             }
         )
                         
@@ -165,8 +166,8 @@ if st.session_state.merged_df is not None:
             use_container_width=True, 
             hide_index=True,
             column_config={
-                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", text=f"View {site1}"),
-                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", text=f"View {site2}")
+                f'{site1}_url': st.column_config.LinkColumn(f"🔗 {site1}", display_text=f"View {site1}"),
+                f'{site2}_url': st.column_config.LinkColumn(f"🔗 {site2}", display_text=f"View {site2}")
             }
         )
 else:
